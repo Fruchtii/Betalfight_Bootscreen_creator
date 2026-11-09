@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Betaflight boot logo generator</title>
+<style>
+  :root {
+    --bg: #ffffff; --surface: #f4f3ef; --text: #1a1a18; --muted: #6b6a65;
+    --border: rgba(0,0,0,.15); --accent: #2f6fde; --on-accent: #ffffff; --danger: #c0392b; --ok: #2e7d32; --radius: 8px;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1b; --surface: #2a2a28; --text: #ecebe6; --muted: #a3a29c;
+      --border: rgba(255,255,255,.16); --accent: #6ea0ff; --on-accent: #0d1b33; --danger: #ff7b6b; --ok: #7bd88f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 780px; margin: 0 auto; padding: 2rem 1rem 3rem; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 .25rem; }
+  .lead { color: var(--muted); margin: 0 0 1.5rem; font-size: 15px; }
+  .pv { width: 100%; image-rendering: pixelated; border-radius: var(--radius);
+        border: 1px solid var(--border); display: block; }
+  .bar { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin: 8px 0 0; }
+  .sec { font-size: 15px; font-weight: 600; margin: 1.5rem 0 10px; }
+  .g { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2px 24px; }
+  .r { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; min-width: 0; }
+  .r > label:first-child { font-size: 13px; color: var(--muted); min-width: 84px; }
+  .r input[type=range], .r select, .r input[type=text] { flex: 1; min-width: 0; }
+  .v { font-size: 13px; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+  .ck { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  input[type=text], select {
+    height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg); color: var(--text); font: inherit; font-size: 14px;
+  }
+  input[type=range], input[type=checkbox] { accent-color: var(--accent); }
+  input[type=file] { font-size: 13px; color: var(--muted); }
+  button {
+    height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: transparent; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
+  }
+  button:hover { background: var(--surface); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .note { font-size: 13px; color: var(--muted); }
+  .err { font-size: 13px; color: var(--danger); }
+  .okmsg { font-size: 13px; color: var(--ok); }
+  pre.cli {
+    margin: 0 0 10px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  details { margin-top: 2rem; background: var(--surface); border-radius: 12px; padding: 1rem 1.25rem; }
+  summary { cursor: pointer; font-weight: 600; }
+  details li { margin: 4px 0; font-size: 14px; }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Betaflight boot logo generator</h1>
+  <p class="lead">Make a custom 288×72 boot logo from text in any language and your own images, ready to upload in Betaflight Configurator.</p>
+
+  <canvas id="pv" class="pv" width="576" height="144" aria-label="Logo preview"></canvas>
+  <div class="bar">
+    <label class="ck"><input type="checkbox" id="gm">Show green (actual file)</label>
+    <label class="ck"><input type="checkbox" id="gr">Show tile grid</label>
+    <span id="fst" class="note"></span>
+  </div>
+
+  <div class="sec">Text</div>
+  <div class="g">
+    <div class="r"><label for="lg">Language</label><select id="lg"></select></div>
+    <div class="r"><label for="ff">Font</label><select id="ff"></select></div>
+    <div class="r"><label for="t1">Line 1</label><input type="text" id="t1" dir="auto"></div>
+    <div class="r"><label for="t2">Line 2</label><input type="text" id="t2" dir="auto" placeholder="Optional"></div>
+    <div class="r"><label for="sz">Max size</label><input type="range" id="sz" min="10" max="72" step="1" value="48"><span class="v" id="szv"></span></div>
+    <div class="r"><label for="ol">Outline</label><input type="range" id="ol" min="0" max="5" step="1" value="2"><span class="v" id="olv"></span></div>
+    <div class="r"><label for="tx">Move X</label><input type="range" id="tx" min="-144" max="144" step="1" value="0"><span class="v" id="txv"></span></div>
+    <div class="r"><label for="ty">Move Y</label><input type="range" id="ty" min="-36" max="36" step="1" value="0"><span class="v" id="tyv"></span></div>
+    <div class="r"><label>Style</label>
+      <label class="ck"><input type="checkbox" id="bd" checked>Bold</label>
+      <label class="ck"><input type="checkbox" id="ti">Black text</label>
+    </div>
+  </div>
+
+  <div class="sec">Image</div>
+  <div class="r">
+    <input type="file" id="fi" accept="image/*" style="flex:1;min-width:0">
+    <button id="cl">Remove image</button>
+  </div>
+  <div class="g">
+    <div class="r"><label for="rm">Background</label>
+      <label class="ck"><input type="checkbox" id="rb" checked>Remove</label>
+      <select id="rm"><option value="flood">Touching the edges</option><option value="all">Everywhere</option></select>
+    </div>
+    <div class="r"><label for="tol">Tolerance</label><input type="range" id="tol" min="0" max="160" step="1" value="40"><span class="v" id="tolv"></span></div>
+    <div class="r"><label for="cm">Colors</label>
+      <select id="cm">
+        <option value="bw">Light to white, dark to black</option>
+        <option value="wt">Light to white, dark to clear</option>
+        <option value="bt">Dark to black, light to clear</option>
+        <option value="inv">Inverted</option>
+        <option value="sil">White silhouette</option>
+      </select>
+    </div>
+    <div class="r"><label for="th">Threshold</label><input type="range" id="th" min="1" max="254" step="1" value="128"><span class="v" id="thv"></span></div>
+    <div class="r"><label for="sc">Scale</label><input type="range" id="sc" min="10" max="300" step="1" value="100"><span class="v" id="scv"></span></div>
+    <div class="r"><label>Options</label>
+      <label class="ck"><input type="checkbox" id="dt">Dither (photos)</label>
+      <label class="ck"><input type="checkbox" id="io" checked>Black outline</label>
+    </div>
+    <div class="r"><label for="ix">Move X</label><input type="range" id="ix" min="-288" max="288" step="1" value="0"><span class="v" id="ixv"></span></div>
+    <div class="r"><label for="iy">Move Y</label><input type="range" id="iy" min="-72" max="72" step="1" value="0"><span class="v" id="iyv"></span></div>
+  </div>
+
+  <div class="bar" style="margin-top:1.5rem">
+    <button id="db" class="primary">Download BMP</button>
+    <button id="dp">Download PNG</button>
+    <span id="err" class="err" role="alert"></span>
+  </div>
+
+  <div class="sec">Show it when arming</div>
+  <p class="note" style="margin:0 0 10px">By default the logo only appears at boot. Betaflight 4.2 and newer can also show it when you arm. Paste these lines into the CLI tab.</p>
+  <div class="g">
+    <div class="r"><label for="am">On arming</label>
+      <select id="am">
+        <option value="ON">Every time I arm</option>
+        <option value="FIRST_ARMING">First arm after power-up</option>
+        <option value="OFF">Never (default)</option>
+      </select>
+    </div>
+    <div class="r"><label for="ad">Duration</label><input type="range" id="ad" min="5" max="50" step="1" value="20"><span class="v" id="adv"></span></div>
+  </div>
+  <pre class="cli" id="cli" aria-label="CLI commands"></pre>
+  <div class="bar" style="margin:0">
+    <button id="cc">Copy commands</button>
+    <span id="ccs" class="okmsg" role="status"></span>
+  </div>
+
+  <details>
+    <summary>How to upload it to your quad</summary>
+    <ol>
+      <li>Download the BMP. It's the safest format, because it has no alpha channel.</li>
+      <li>In Betaflight Configurator, open the OSD tab, then Font Manager.</li>
+      <li>Select your font preset, or open your own .mcm font file.</li>
+      <li>Click "Select custom logo image", choose the BMP and check that both green ticks appear.</li>
+      <li>Click "Upload Font". The logo is stored inside the font, so it's uploaded together with it.</li>
+    </ol>
+    <p class="note">Configurator only accepts pixels that are exactly black, white or green (<code>#00FF00</code>, which becomes transparent). Any other color fails the color check, and so does real transparency, because Configurator ignores the alpha channel. That's why this tool never writes alpha.</p>
+    <p class="note">This works for analog (MAX7456) OSDs. Digital systems like HDZero, Walksnail and DJI/WTFOS use the goggles' own font instead.</p>
+  </details>
+</main>
+
+<script>
+/* ===== Constants ===== */
+const W = 288, H = 72;                       // Betaflight boot logo size
+const CLEAR = 0, WHITE = 1, BLACK = 2;       // pixel classes
+const $ = id => document.getElementById(id);
+const RTL = /[֐-ࣿיִ-﻿]/;  // Hebrew + Arabic ranges
+
+/* [name, Google Fonts query (null = system), scripts, CSS family for system fonts] */
+const FONTS = [
+  ['Rubik', 'Rubik:wght@400;700', 'latin hebrew cyrillic'],
+  ['Heebo', 'Heebo:wght@400;700', 'hebrew'],
+  ['Assistant', 'Assistant:wght@400;700', 'hebrew'],
+  ['Secular One', 'Secular+One', 'hebrew'],
+  ['Suez One', 'Suez+One', 'hebrew'],
+  ['Varela Round', 'Varela+Round', 'hebrew'],
+  ['Frank Ruhl Libre', 'Frank+Ruhl+Libre:wght@400;700', 'hebrew'],
+  ['Noto Sans Hebrew', 'Noto+Sans+Hebrew:wght@400;700', 'hebrew'],
+  ['Cairo', 'Cairo:wght@400;700', 'arabic'],
+  ['Tajawal', 'Tajawal:wght@400;700', 'arabic'],
+  ['Lalezar', 'Lalezar', 'arabic'],
+  ['Noto Sans Arabic', 'Noto+Sans+Arabic:wght@400;700', 'arabic'],
+  ['Orbitron', 'Orbitron:wght@400;700', 'latin'],
+  ['Bebas Neue', 'Bebas+Neue', 'latin'],
+  ['Black Ops One', 'Black+Ops+One', 'latin'],
+  ['Audiowide', 'Audiowide', 'latin'],
+  ['Russo One', 'Russo+One', 'latin cyrillic'],
+  ['Oswald', 'Oswald:wght@400;700', 'latin cyrillic'],
+  ['Press Start 2P', 'Press+Start+2P', 'latin cyrillic'],
+  ['Silkscreen', 'Silkscreen:wght@400;700', 'latin'],
+  ['VT323', 'VT323', 'latin'],
+  ['Noto Sans', 'Noto+Sans:wght@400;700', 'latin cyrillic greek'],
+  ['Roboto', 'Roboto:wght@400;700', 'latin cyrillic greek'],
+  ['Noto Sans JP', 'Noto+Sans+JP:wght@400;700', 'ja'],
+  ['Dela Gothic One', 'Dela+Gothic+One', 'ja'],
+  ['DotGothic16', 'DotGothic16', 'ja'],
+  ['Noto Sans KR', 'Noto+Sans+KR:wght@400;700', 'ko'],
+  ['Black Han Sans', 'Black+Han+Sans', 'ko'],
+  ['Noto Sans SC', 'Noto+Sans+SC:wght@400;700', 'zh'],
+  ['ZCOOL KuaiLe', 'ZCOOL+KuaiLe', 'zh'],
+  ['Noto Sans Devanagari', 'Noto+Sans+Devanagari:wght@400;700', 'hi'],
+  ['Teko', 'Teko:wght@400;700', 'hi'],
+  ['Noto Sans Thai', 'Noto+Sans+Thai:wght@400;700', 'th'],
+  ['Kanit', 'Kanit:wght@400;700', 'th'],
+  ['System sans', null, '*', 'Arial, sans-serif'],
+  ['System serif', null, '*', "'Times New Roman', serif"],
+  ['System mono', null, '*', "'Courier New', monospace"],
+];
+
+/* [script key, label, sample text] */
+const LANGS = [
+  ['latin', 'Latin (English, German, French…)', 'MY QUAD'],
+  ['hebrew', 'Hebrew', 'שלום'],
+  ['arabic', 'Arabic', 'مرحبا'],
+  ['cyrillic', 'Cyrillic (Russian, Ukrainian…)', 'ПРИВЕТ'],
+  ['greek', 'Greek', 'ΓΕΙΑ ΣΟΥ'],
+  ['ja', 'Japanese', 'こんにちは'],
+  ['zh', 'Chinese (simplified)', '你好'],
+  ['ko', 'Korean', '안녕하세요'],
+  ['hi', 'Hindi (Devanagari)', 'नमस्ते'],
+  ['th', 'Thai', 'สวัสดี'],
+];
+
+/* ===== State ===== */
+let sourceImage = null;   // original uploaded image
+let cleanedImage = null;  // canvas after background removal
+const px = new Uint8Array(W * H); // final pixel classes
+
+/* Work canvases */
+const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
+const lc = layer.getContext('2d', { willReadFrequently: true });
+const fileCv = document.createElement('canvas'); fileCv.width = W; fileCv.height = H;
+const fc = fileCv.getContext('2d');
+const pv = $('pv').getContext('2d');
+
+/* ===== Fonts ===== */
+const loadedFonts = {};
+const requestedGlyphs = new Set();
+
+function currentFont() { return FONTS[+$('ff').value]; }
+
+function fillFontList() {
+  const script = $('lg').value;
+  const prev = $('ff').value !== '' ? currentFont()[0] : null;
+  $('ff').innerHTML = '';
+  FONTS.forEach((f, i) => {
+    if (f[2] === '*' || f[2].split(' ').includes(script)) $('ff').add(new Option(f[0], i));
+  });
+  const keep = [...$('ff').options].find(o => FONTS[+o.value][0] === prev);
+  if (keep) $('ff').value = keep.value;
+}
+
+function loadGoogleFont() {
+  const f = currentFont();
+  if (!f[1] || loadedFonts[f[0]]) return;
+  loadedFonts[f[0]] = true;
+  $('fst').textContent = `Loading ${f[0]}…`;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${f[1]}&display=swap`;
+  link.onload = () => {
+    const sample = ($('t1').value + $('t2').value) || 'A';
+    Promise.allSettled([
+      document.fonts.load(`400 40px "${f[0]}"`, sample),
+      document.fonts.load(`700 40px "${f[0]}"`, sample),
+    ]).then(() => { $('fst').textContent = ''; requestedGlyphs.clear(); render(); });
+  };
+  link.onerror = () => { $('fst').textContent = `Couldn't load ${f[0]}, using a fallback font`; };
+  document.head.appendChild(link);
+}
+
+/* Big fonts (CJK, Arabic…) are split into unicode-range chunks.
+   Request exactly the glyphs we need, then re-render once when they arrive. */
+function requestGlyphs(fontString, text) {
+  const key = fontString + '|' + text;
+  if (requestedGlyphs.has(key)) return;
+  requestedGlyphs.add(key);
+  document.fonts.load(fontString, text).then(r => { if (r.length) render(); }).catch(() => {});
+}
+
+/* ===== Background removal ===== */
+function detectBackground(d, w, h) {
+  const buckets = {};
+  const add = i => {
+    if (d[i*4+3] < 128) return;
+    const k = (d[i*4] >> 4) + ',' + (d[i*4+1] >> 4) + ',' + (d[i*4+2] >> 4);
+    const b = buckets[k] || (buckets[k] = [0, 0, 0, 0]);
+    b[0]++; b[1] += d[i*4]; b[2] += d[i*4+1]; b[3] += d[i*4+2];
+  };
+  for (let x = 0; x < w; x++) { add(x); add((h-1)*w + x); }
+  for (let y = 0; y < h; y++) { add(y*w); add(y*w + w - 1); }
+  let best = null;
+  for (const k in buckets) if (!best || buckets[k][0] > best[0]) best = buckets[k];
+  return best ? [best[1]/best[0], best[2]/best[0], best[3]/best[0]] : [255, 255, 255];
+}
+
+function processImage() {
+  if (!sourceImage) { cleanedImage = null; return; }
+  const nw = sourceImage.naturalWidth || 300, nh = sourceImage.naturalHeight || 150;
+  const k = Math.min(1, 600 / Math.max(nw, nh));
+  const w = Math.max(1, Math.round(nw * k)), h = Math.max(1, Math.round(nh * k));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(sourceImage, 0, 0, w, h);
+
+  if ($('rb').checked) {
+    const id = x.getImageData(0, 0, w, h), d = id.data;
+    const bg = detectBackground(d, w, h);
+    const tol2 = Math.pow(+$('tol').value, 2);
+    const isBg = i => {
+      if (d[i*4+3] < 128) return true;
+      const a = d[i*4]-bg[0], b = d[i*4+1]-bg[1], e = d[i*4+2]-bg[2];
+      return a*a + b*b + e*e <= tol2;
+    };
+    if ($('rm').value === 'all') {
+      for (let i = 0; i < w*h; i++) if (isBg(i)) d[i*4+3] = 0;
+    } else {
+      const seen = new Uint8Array(w*h), q = new Int32Array(w*h);
+      let head = 0, tail = 0;
+      const push = i => { if (!seen[i] && isBg(i)) { seen[i] = 1; q[tail++] = i; } };
+      for (let X = 0; X < w; X++) { push(X); push((h-1)*w + X); }
+      for (let Y = 0; Y < h; Y++) { push(Y*w); push(Y*w + w - 1); }
+      while (head < tail) {
+        const i = q[head++], X = i % w, Y = (i / w) | 0;
+        if (X > 0) push(i-1); if (X < w-1) push(i+1);
+        if (Y > 0) push(i-w); if (Y < h-1) push(i+w);
+      }
+      for (let i = 0; i < w*h; i++) if (seen[i]) d[i*4+3] = 0;
+    }
+    x.putImageData(id, 0, 0);
+  }
+  cleanedImage = c;
+}
+
+/* ===== Layers ===== */
+function imageLayer() {
+  const out = new Uint8Array(W*H);
+  if (!cleanedImage) return out;
+  lc.clearRect(0, 0, W, H);
+  const fit = Math.min(W / cleanedImage.width, H / cleanedImage.height) * (+$('sc').value / 100);
+  const w = cleanedImage.width * fit, h = cleanedImage.height * fit;
+  lc.imageSmoothingEnabled = true; lc.imageSmoothingQuality = 'high';
+  lc.drawImage(cleanedImage, (W-w)/2 + +$('ix').value, (H-h)/2 + +$('iy').value, w, h);
+
+  const d = lc.getImageData(0, 0, W, H).data;
+  const thr = +$('th').value, mode = $('cm').value;
+  const dither = $('dt').checked && mode !== 'sil';
+  const lum = new Float32Array(W*H), opaque = new Uint8Array(W*H);
+  for (let i = 0; i < W*H; i++) {
+    opaque[i] = d[i*4+3] >= 128 ? 1 : 0;
+    lum[i] = 0.299*d[i*4] + 0.587*d[i*4+1] + 0.114*d[i*4+2];
+  }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y*W + x;
+    if (!opaque[i]) continue;
+    const v = lum[i], light = v >= thr;
+    if (dither) { // Floyd–Steinberg, only spreading error onto opaque pixels
+      const e = v - (light ? 255 : 0);
+      const spread = (j, f) => { if (opaque[j]) lum[j] += e * f; };
+      if (x < W-1) spread(i+1, 7/16);
+      if (y < H-1) { if (x > 0) spread(i+W-1, 3/16); spread(i+W, 5/16); if (x < W-1) spread(i+W+1, 1/16); }
+    }
+    out[i] = mode === 'sil' ? WHITE
+           : mode === 'bw'  ? (light ? WHITE : BLACK)
+           : mode === 'wt'  ? (light ? WHITE : CLEAR)
+           : mode === 'bt'  ? (light ? CLEAR : BLACK)
+           :                  (light ? BLACK : WHITE);
+  }
+  if (!$('io').checked) return out;
+
+  const outlined = out.slice(); // 1px black outline around white areas
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y*W + x;
+    if (out[i]) continue;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      const X = x+b, Y = y+a;
+      if (X >= 0 && X < W && Y >= 0 && Y < H && out[Y*W+X] === WHITE) outlined[i] = BLACK;
+    }
+  }
+  return outlined;
+}
+
+function textLayer() {
+  const out = new Uint8Array(W*H);
+  const lines = [$('t1').value.trim(), $('t2').value.trim()].filter(Boolean);
+  if (!lines.length) return out;
+
+  const f = currentFont();
+  const family = f[3] || `"${f[0]}", sans-serif`;
+  const size = +$('sz').value, ow = +$('ol').value;
+  const invert = $('ti').checked, bold = $('bd').checked;
+  const dx = +$('tx').value, dy = +$('ty').value;
+  const lineH = H / lines.length;
+  const font = s => `${bold ? 'bold ' : ''}${s}px ${family}`;
+
+  lc.clearRect(0, 0, W, H);
+  lc.textAlign = 'center'; lc.textBaseline = 'middle'; lc.lineJoin = 'round';
+
+  lines.forEach((t, i) => {
+    lc.direction = RTL.test(t) ? 'rtl' : 'ltr';
+    let s = Math.max(8, Math.min(size, Math.floor(lineH - ow*2)));
+    lc.font = font(s);
+    while (s > 8 && lc.measureText(t).width + ow*2 > W - 4) { s--; lc.font = font(s); }
+    requestGlyphs(font(s), t);
+    const x = W/2 + dx, y = lineH*i + lineH/2 + 1 + dy;
+    if (ow > 0) { lc.strokeStyle = invert ? '#fff' : '#000'; lc.lineWidth = ow*2; lc.strokeText(t, x, y); }
+    lc.fillStyle = invert ? '#000' : '#fff';
+    lc.fillText(t, x, y);
+  });
+
+  const d = lc.getImageData(0, 0, W, H).data;
+  for (let i = 0; i < W*H; i++) {
+    if (d[i*4+3] >= 110) out[i] = (d[i*4] + d[i*4+1] + d[i*4+2]) / 3 > 127 ? WHITE : BLACK;
+  }
+  return out;
+}
+
+/* ===== Output ===== */
+const RGB = { [CLEAR]: [0, 255, 0], [WHITE]: [255, 255, 255], [BLACK]: [0, 0, 0] };
+
+function drawFileCanvas() {
+  const im = fc.createImageData(W, H);
+  for (let i = 0; i < W*H; i++) {
+    const c = RGB[px[i]];
+    im.data[i*4] = c[0]; im.data[i*4+1] = c[1]; im.data[i*4+2] = c[2]; im.data[i*4+3] = 255;
+  }
+  fc.putImageData(im, 0, 0);
+  return fileCv;
+}
+
+function drawPreview() {
+  if ($('gm').checked) {
+    pv.imageSmoothingEnabled = false;
+    pv.drawImage(drawFileCanvas(), 0, 0, 576, 144);
+  } else { // fake "video" background: sky + ground
+    pv.fillStyle = '#5b7fa3'; pv.fillRect(0, 0, 576, 72);
+    pv.fillStyle = '#6b7d4f'; pv.fillRect(0, 72, 576, 72);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const p = px[y*W + x];
+      if (p) { pv.fillStyle = p === WHITE ? '#fff' : '#000'; pv.fillRect(x*2, y*2, 2, 2); }
+    }
+  }
+  if ($('gr').checked) { // MAX7456 tiles are 12×18 px (24×36 in the 2× preview)
+    pv.strokeStyle = 'rgba(255,60,60,0.55)'; pv.lineWidth = 1; pv.beginPath();
+    for (let x = 24; x < 576; x += 24) { pv.moveTo(x+.5, 0); pv.lineTo(x+.5, 144); }
+    for (let y = 36; y < 144; y += 36) { pv.moveTo(0, y+.5); pv.lineTo(576, y+.5); }
+    pv.stroke();
+  }
+}
+
+/* 24-bit BMP, no alpha channel: 54-byte header + bottom-up BGR rows (864 bytes/row, no padding needed) */
+function makeBmp() {
+  const row = W*3, size = 54 + row*H;
+  const buf = new ArrayBuffer(size), v = new DataView(buf);
+  v.setUint8(0, 0x42); v.setUint8(1, 0x4D);   // "BM"
+  v.setUint32(2, size, true); v.setUint32(10, 54, true);
+  v.setUint32(14, 40, true); v.setInt32(18, W, true); v.setInt32(22, H, true);
+  v.setUint16(26, 1, true); v.setUint16(28, 24, true);
+  v.setUint32(34, row*H, true); v.setInt32(38, 2835, true); v.setInt32(42, 2835, true);
+  let k = 54;
+  for (let y = H-1; y >= 0; y--) for (let x = 0; x < W; x++) {
+    const c = RGB[px[y*W + x]];
+    v.setUint8(k++, c[2]); v.setUint8(k++, c[1]); v.setUint8(k++, c[0]);
+  }
+  return new Blob([buf], { type: 'image/bmp' });
+}
+
+function download(url, name) {
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ===== Arming CLI helper =====
+   osd_logo_on_arming: OFF | ON | FIRST_ARMING (Betaflight 4.2+)
+   osd_logo_on_arming_duration: tenths of a second, 5–50 (firmware default 5 = 0.5 s) */
+function armingCommands() {
+  const mode = $('am').value, dur = $('ad').value;
+  const lines = [`set osd_logo_on_arming = ${mode}`];
+  if (mode !== 'OFF') lines.push(`set osd_logo_on_arming_duration = ${dur}`);
+  lines.push('save');
+  return lines.join('\n');
+}
+
+function updateArming() {
+  const off = $('am').value === 'OFF';
+  $('ad').disabled = off;
+  $('adv').textContent = (+$('ad').value / 10).toFixed(1) + ' s';
+  $('cli').textContent = armingCommands();
+  $('ccs').textContent = '';
+}
+
+async function copyCommands() {
+  const text = armingCommands();
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch { // older browsers or non-secure pages: select the text so Ctrl+C works
+    const r = document.createRange(); r.selectNodeContents($('cli'));
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    $('ccs').textContent = 'Selected, press Ctrl+C to copy';
+    return;
+  }
+  $('ccs').textContent = 'Copied';
+}
+
+/* ===== Main render ===== */
+function updateLabels() {
+  $('szv').textContent = $('sz').value + 'px';
+  $('olv').textContent = $('ol').value + 'px';
+  $('txv').textContent = $('tx').value;
+  $('tyv').textContent = $('ty').value;
+  $('tolv').textContent = $('tol').value;
+  $('thv').textContent = $('th').value;
+  $('scv').textContent = $('sc').value + '%';
+  $('ixv').textContent = $('ix').value;
+  $('iyv').textContent = $('iy').value;
+}
+
+function render() {
+  updateLabels();
+  const img = imageLayer(), txt = textLayer();
+  for (let i = 0; i < W*H; i++) px[i] = txt[i] || img[i]; // text on top
+  drawPreview();
+}
+
+/* ===== UI wiring ===== */
+const hasContent = () => $('t1').value.trim() || $('t2').value.trim() || sourceImage;
+const needContent = () => { $('err').textContent = 'Add some text or an image first'; };
+
+$('db').onclick = () => {
+  if (!hasContent()) return needContent();
+  const url = URL.createObjectURL(makeBmp());
+  download(url, 'bf_boot_logo.bmp');
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+$('dp').onclick = () => {
+  if (!hasContent()) return needContent();
+  download(drawFileCanvas().toDataURL('image/png'), 'bf_boot_logo.png');
+};
+
+LANGS.forEach(l => $('lg').add(new Option(l[1], l[0])));
+let lastSample = '';
+$('lg').addEventListener('change', () => {
+  const lang = LANGS.find(l => l[0] === $('lg').value);
+  fillFontList();
+  if (!$('t1').value.trim() || $('t1').value === lastSample) $('t1').value = lang[2];
+  lastSample = lang[2];
+  loadGoogleFont(); render();
+});
+$('ff').addEventListener('change', () => { loadGoogleFont(); render(); });
+
+['t1','t2','sz','ol','tx','ty','th','sc','ix','iy'].forEach(id =>
+  $(id).addEventListener('input', () => { $('err').textContent = ''; render(); }));
+['bd','ti','gm','gr','cm','dt','io'].forEach(id => $(id).addEventListener('change', render));
+['rb','rm'].forEach(id => $(id).addEventListener('change', () => { processImage(); render(); }));
+$('tol').addEventListener('input', () => { processImage(); render(); });
+
+$('fi').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $('err').textContent = '';
+  const url = URL.createObjectURL(file);
+  const im = new Image();
+  im.onload = () => { URL.revokeObjectURL(url); sourceImage = im; processImage(); render(); };
+  im.onerror = () => { URL.revokeObjectURL(url); $('err').textContent = "Couldn't read that image. Try a PNG or JPG."; };
+  im.src = url;
+});
+$('cl').onclick = () => { sourceImage = null; cleanedImage = null; $('fi').value = ''; render(); };
+
+$('am').addEventListener('change', updateArming);
+$('ad').addEventListener('input', updateArming);
+$('cc').onclick = copyCommands;
+
+/* Start: Hebrew, first matching font */
+$('lg').value = 'hebrew';
+fillFontList();
+lastSample = 'שלום';
+$('t1').value = lastSample;
+loadGoogleFont();
+render();
+updateArming();
+</script>
+</body>
+</html>
